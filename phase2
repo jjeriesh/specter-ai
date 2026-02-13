@@ -1,0 +1,119 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, accuracy_score
+import joblib
+import re
+from urllib.parse import urlparse
+
+def generate_phishing_data(n_samples=15000):
+    """Generate realistic training dataset"""
+    safe_domains = ['google.com', 'github.com', 'stackoverflow.com', 'wikipedia.org', 
+                   'microsoft.com', 'apple.com', 'amazon.com']
+    phishing_patterns = ['login-', 'secure-', 'bank-', 'paypal-', 'update-', 'verify-', 
+                        'account-', 'support-', 'reset-']
+    
+    urls, labels = [], []
+    
+    # Safe URLs (50%)
+    for _ in range(n_samples//2):
+        domain = np.random.choice(safe_domains)
+        path = f"{domain}/" + "/".join(np.random.choice(['home', 'about', 'search', 'login', ''], 2))
+        urls.append(f"https://{path}")
+        labels.append(0)
+    
+    # Phishing URLs (50%)
+    for _ in range(n_samples//2):
+        pattern = np.random.choice(phishing_patterns)
+        service = np.random.choice(['bank', 'paypal', 'amazon', 'netflix', 'microsoft'])
+        num = np.random.randint(1000, 9999)
+        domain = f"{pattern}{service}-{num}.com"
+        path = f"/{np.random.choice(['login', 'verify', 'update', 'secure', 'account'])}"
+        urls.append(f"https://{domain}{path}")
+        labels.append(1)
+    
+    return pd.DataFrame({'url': urls, 'phishing': labels})
+
+def extract_url_features(url):
+    """Specter RefleX ML Features (Phase 1 C-Based Engine)"""
+    features = {}
+    parsed = urlparse(url)
+    domain, path = parsed.netloc.lower(), parsed.path.lower()
+    
+    features.update({
+        'domain_length': len(domain),
+        'path_length': len(path),
+        'has_ip': 1 if re.match(r'^\d+\.\d+\.\d+\.\d+', domain) else 0,
+        'suspicious_keywords': len(re.findall(r'(login|secure|verify|update|bank|paypal)', domain + path)),
+        'hyphens_count': domain.count('-'),
+        'subdomains_count': len(domain.split('.')) - 2,
+        'https': 1 if parsed.scheme == 'https' else 0,
+        'short_domain': 1 if len(domain) < 8 else 0,
+        'digits_in_domain': sum(c.isdigit() for c in domain),
+        'double_slash': 1 if '//' in path else 0
+    })
+    
+    return features
+
+class SpecterDetector:
+    def __init__(self):
+        self.vectorizer = TfidfVectorizer(max_features=50, ngram_range=(2,3))
+        self.model = LogisticRegression(random_state=42, max_iter=2000)
+        self.feature_cols = ['domain_length', 'path_length', 'has_ip', 'suspicious_keywords', 
+                           'hyphens_count', 'subdomains_count', 'https', 'short_domain',
+                           'digits_in_domain', 'double_slash']
+    
+    def prepare_features(self, urls):
+        url_features = [extract_url_features(u) for u in urls]
+        df_features = pd.DataFrame(url_features)
+        
+        domains = [urlparse(u).netloc for u in urls]
+        domain_tfidf = self.vectorizer.fit_transform(domains).toarray()[:, :20]
+        
+        combined = np.hstack([df_features[self.feature_cols].values, domain_tfidf])
+        return combined
+    
+    def train(self, X, y):
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        self.model.fit(X_train, y_train)
+        
+        train_acc = accuracy_score(y_train, self.model.predict(X_train))
+        test_acc = accuracy_score(y_test, self.model.predict(X_test))
+        
+        print(f"✅ Specter ML Training Complete")
+        print(f"📊 Train Accuracy: {train_acc:.3f} | Test Accuracy: {test_acc:.3f}")
+        print("\n📈 Classification Report:")
+        print(classification_report(y_test, self.model.predict(X_test)))
+        
+        return test_acc
+    
+    def predict_url(self, url):
+        features = self.prepare_features([url])
+        prob = self.model.predict_proba(features)[0][1]
+        prediction = self.model.predict(features)[0]
+        
+        if prediction == 1:
+            return True, f"🚫 STOP: Immediate Block (Phishing: {prob:.1%})"
+        return False, f"✅ PASS (Phishing: {prob:.1%})"
+
+if __name__ == "__main__":
+    print("🚀 Training Specter AI Phishing Detection Model...")
+    df = generate_phishing_data()
+    detector = SpecterDetector()
+    
+    X = detector.prepare_features(df['url'].tolist())
+    y = df['phishing'].values
+    
+    detector.train(X, y)
+    joblib.dump(detector, 'specter_phishing_model.pkl')
+    print("💾 Model saved: specter_phishing_model.pkl")
+    
+    # Test live URLs
+    tests = ["https://google.com", "https://login-paypal-1234.com/verify", 
+             "https://github.com", "https://secure-bank-update-5678.com/account"]
+    print("\n🧪 Live Tests:")
+    for url in tests:
+        is_phish, msg = detector.predict_url(url)
+        print(f"  {url[:50]}... → {msg}")
