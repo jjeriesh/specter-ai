@@ -1,0 +1,57 @@
+import streamlit as st
+import streamlit_authenticator as stauth
+import yaml
+from pathlib import Path
+import joblib
+from specter_ml import SpecterDetector  # Your ML model
+import re
+
+# Load trained model
+@st.cache_resource
+def load_model():
+    return joblib.load('specter_phishing_model.pkl')
+
+model = load_model()
+
+# Config for authentication
+config_file = Path("config.yaml")
+if not config_file.exists():
+    st.error("❌ config.yaml not found! Create it first.")
+    st.stop()
+
+with open(config_file) as file:
+    config = yaml.safe_load(file)
+
+authenticator = stauth.Authenticate(
+    config['credentials'],
+    config['cookie']['name'],
+    config['cookie']['key'], 
+    config['cookie']['expiry_days']
+)
+
+name, authentication_status, username = authenticator.login('Login', 'main')
+
+if authentication_status == False:
+    st.error('❌ Username/password is incorrect')
+elif authentication_status == None:
+    st.warning('⚠️ Please enter your username and password')
+    st.stop()
+elif authentication_status:
+    # Main Specter UI (protected)
+    st.sidebar.success(f'👋 Welcome *{name}*')
+    authenticator.logout('Logout', 'sidebar')
+
+    st.title('🛡️ Specter AI - Proactive Protection')
+    st.markdown('### Phase 1: RefleX ML Phishing Detection')
+
+    url = st.text_input('🔗 Enter URL to scan:', 'https://example.com')
+    if st.button('🚀 Run Specter Analysis', type='primary'):
+        is_phish, result = model.predict_url(url)
+        st.markdown(f"**{result}**")
+        
+        if is_phish:
+            st.error("🚨 IMMEDIATE BLOCK RECOMMENDED")
+        else:
+            st.success("✅ SAFE - Page load approved")
+    
+    authenticator.logout('Logout', 'main')
