@@ -1,0 +1,120 @@
+from flask import Flask, request, render_template_string
+import re
+import requests
+from urllib.parse import urlparse
+import os
+from dotenv import load_dotenv
+
+app = Flask(__name__)
+load_dotenv()
+
+# Specter AI Threat Database (Phase 1 RefleX)
+THREAT_DB = {
+    'phishing.com': 'Known phishing site',
+    'malware.org': 'Malware distribution',
+    'secure-paypal-update.com': 'Phishing clone'
+}
+
+RED_FLAGS = ['urgent', 'wire', 'transfer', 'password', 'click here', 
+             'free money', 'account suspended', 'verify now']
+
+def phase1_reflex(url):
+    """Phase 1: RefleX C-Based Engine - Rapid threat scan"""
+    domain = urlparse(url).netloc.lower()
+    
+    # Immediate pattern block
+    if re.search(r'(phishing|malware|scam|fake)', domain):
+        return "STOP: Immediate Block - Suspicious URL pattern"
+    
+    # Rapid threat database lookup
+    if domain in THREAT_DB:
+        return f"STOP: Immediate Block - {THREAT_DB[domain]}"
+    
+    return "Pass Phase 1"
+
+def phase2_brain(text):
+    """Phase 2: Brain Python NLP - Social engineering analysis"""
+    words = re.findall(r'\b\w+\b', text.lower())
+    flag_count = sum(1 for word in words if word in RED_FLAGS)
+    
+    if flag_count > 2:
+        return "HIGH RISK - Psychological Red Flags Detected"
+    elif flag_count > 0:
+        return "LOW RISK - Minor concerns"
+    return "NO RISK - Clean content"
+
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    result = ""
+    if request.method == 'POST':
+        url = request.form.get('url', '')
+        text = request.form.get('text', '')
+        
+        # Phase 1 RefleX
+        p1 = phase1_reflex(url)
+        if "STOP" in p1:
+            result = f"**Phase 1 (RefleX):** {p1}"
+        else:
+            # Phase 2 Brain
+            p2 = phase2_brain(text)
+            if "HIGH RISK" in p2:
+                result = f"**Phase 1:** Pass\n**Phase 2 (Brain):** {p2}\n🚨 ALERT: Shield user & explain risk"
+            else:
+                result = f"**Phase 1:** Pass\n**Phase 2:** {p2}\n✅ TRUST: Page load"
+    
+    html_template = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Specter AI - Proactive Protection Pipeline</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #f4f4f4; }
+        h1 { color: #333; text-align: center; background: linear-gradient(90deg, #007bff, #0056b3); 
+             -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .form-container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        input, textarea { width: 100%; padding: 12px; margin: 12px 0; border: 2px solid #e1e5e9; border-radius: 8px; box-sizing: border-box; }
+        button { background: linear-gradient(45deg, #007bff, #0056b3); color: white; padding: 12px 30px; 
+                border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,123,255,0.4); }
+        .result { margin-top: 25px; padding: 20px; border-radius: 10px; font-family: monospace; font-size: 14px; }
+        .stop { background: linear-gradient(45deg, #ff4444, #cc0000); color: white; }
+        .alert { background: linear-gradient(45deg, #ffaa00, #cc8800); color: white; }
+        .trust { background: linear-gradient(45deg, #44ff44, #00cc00); color: black; }
+        .flowchart { text-align: center; margin: 30px 0; font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>🛡️ Specter AI: The Proactive Protection Pipeline</h1>
+    <div class="form-container">
+        <form method="post">
+            <label style="font-weight: bold; font-size: 16px; display: block; margin-bottom: 8px;">
+                🔗 Enter URL to Check (Phase 1 RefleX):
+            </label>
+            <input type="url" name="url" placeholder="https://example.com" required>
+            
+            <label style="font-weight: bold; font-size: 16px; display: block; margin: 20px 0 8px 0;">
+                📝 Enter Page Text/Content (Phase 2 Brain):
+            </label>
+            <textarea name="text" rows="6" placeholder="Paste suspicious text, email content, or webpage text here..."></textarea>
+            
+            <button type="submit">🚀 Run Specter AI Analysis</button>
+        </form>
+        
+        {% if result %}
+        <div class="result {{ 'stop' if 'STOP' in result else 'alert' if 'ALERT' in result else 'trust' }}">
+            <pre>{{ result }}</pre>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="flowchart">
+        <strong>Pipeline Flow:</strong> User Opens Link → Phase 1 RefleX (Link Checks + Threat DB) → 
+        Phase 2 Brain (NLP Social Engineering) → BLOCK/ALERT/TRUST
+    </div>
+</body>
+</html>
+    """
+    return render_template_string(html_template, result=result)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
