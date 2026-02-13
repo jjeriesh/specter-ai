@@ -1,0 +1,68 @@
+import os, re, requests
+from flask import Flask, request, jsonify, render_template_string
+from urllib.parse import urlparse
+from dotenv import load_dotenv
+import joblib
+
+load_dotenv()
+app = Flask(__name__)
+
+# Load ML model
+specter_model = joblib.load('specter_phishing_model.pkl')
+
+PHISHTANK_KEY = os.getenv('PHISHTANK_APP_KEY', '')
+VIRUSTOTAL_KEY = os.getenv('VIRUSTOTAL_KEY', '')
+
+THREAT_DB = set(['phishing.com', 'malware.org', 'fake-bank.com'])
+
+def check_apis(url):
+    """Free phishing APIs"""
+    results = []
+    
+    # PhishTank
+    if PHISHTANK_KEY:
+        try:
+            resp = requests.get('http://checkurl.phishtank.com/checkurl/', 
+                              params={'app_key': PHISHTANK_KEY, 'url': url}, timeout=5)
+            if resp.json().get('results', {}).get('in_database'):
+                results.append('PhishTank confirmed phishing')
+        except: pass
+    
+    # VirusTotal (free tier)
+    if VIRUSTOTAL_KEY:
+        try:
+            resp = requests.post('https://www.virustotal.com/vtapi/v2/url/report', 
+                               data={'apikey': VIRUSTOTAL_KEY, 'url': url}, timeout=10)
+            data = resp.json()
+            if data.get('positives', 0) > 0:
+                results.append(f'VirusTotal: {data["positives"]}/{data["total"]} detections')
+        except: pass
+    
+    return results
+
+@app.route('/api/scan', methods=['POST'])
+def api_scan():
+    """JSON API for extension/mobile"""
+    data = request.json
+    url = data.get('url', '')
+    
+    # Phase 1: ML + APIs + DB
+    is_ml_phish, ml_msg = specter_model.predict_url(url)
+    api_results = check_apis(url)
+    domain = urlparse(url).netloc.lower()
+    
+    final_score = 0
+    if is_ml_phish: final_score += 40
+    if domain in THREAT_DB: final_score += 30  
+    for result in api_results: final_score += 20
+    
+    status = "BLOCK" if final_score > 50 else "ALERT" if final_score > 20 else "TRUST"
+    
+    return jsonify({
+        'url': url,
+        'status': status,
+        'risk_score': final_score,
+        'ml_result': ml_msg,
+        'api_results': api_results,
+        'threat_db_hit': domain in THREAT_DB
+    })
