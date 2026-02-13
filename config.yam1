@@ -1,0 +1,14 @@
+credentials:
+  usernames:
+    admin:
+      email: admin@example.com
+      name: Admin
+    user:
+      email: user@example.com
+      name: User
+cookie:
+  name: specter_auth
+  key: your_32_character_random_key_here_1234567890
+  expiry_days: 30
+preauthorized_emails:
+  - admin@example.com
