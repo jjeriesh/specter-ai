@@ -1,0 +1,25 @@
+
+Be precise, technical, safety-focused. Never say "maybe safe".
+        """
+    
+    def analyze_url(self, url):
+        """Full Specter pipeline analysis"""
+        is_phish, ml_result = self.model.predict_url(url)
+        
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": f"Analyze this URL:\n{url}\nML Result: {ml_result}"}
+        ]
+        
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            max_tokens=250,
+            temperature=0.1
+        )
+        
+        return {
+            'ml_result': ml_result,
+            'ai_analysis': response.choices[0].message.content.strip(),
+            'is_phishing': is_phish
+        }
