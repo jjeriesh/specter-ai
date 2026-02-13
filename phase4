@@ -1,0 +1,18 @@
+import openai
+import os
+from dotenv import load_dotenv
+import joblib
+
+load_dotenv()
+openai.api_key = os.getenv('OPENAI_API_KEY')
+
+class SpecterAIAssistant:
+    def __init__(self, ml_model_path='specter_phishing_model.pkl'):
+        self.model = joblib.load(ml_model_path)
+        self.system_prompt = """
+You are Specter AI Assistant - cybersecurity expert following this exact pipeline:
+1️⃣ PHASE 1: RefleX (ML + Threat DB scan)
+2️⃣ PHASE 2: Brain (NLP social engineering analysis)  
+3️⃣ ACTION: BLOCK/ALERT/TRUST + explanation
+
+ALWAYS respond in this structured format:
